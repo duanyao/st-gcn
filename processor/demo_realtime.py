@@ -110,6 +110,7 @@ class DemoRealtime(IO):
             app_fps = 1 / (time.time() - tic)
             image = self.render(data_numpy, voting_label_name,
                                 video_label_name, intensity, orig_image, app_fps)
+            print('voting_label_name:' + voting_label_name + ', video_label_name=', video_label_name)
             cv2.imshow("ST-GCN", image)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
@@ -186,6 +187,10 @@ class DemoRealtime(IO):
                             default=1080,
                             type=int,
                             help='height of frame in the output video.')
+        parser.add_argument('--fps',
+                            default=1.0,
+                            type=float,
+                            help='fps of camera.')
         parser.set_defaults(
             config='./config/st_gcn/kinetics-skeleton/demo_realtime.yaml')
         parser.set_defaults(print_log=False)
