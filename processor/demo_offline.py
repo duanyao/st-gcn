@@ -28,7 +28,10 @@ class DemoOffline(IO):
             self.label_name = label_name
 
         # pose estimation
-        video, data_numpy = self.pose_estimation()
+        # video, data_numpy = self.pose_estimation()
+
+        video, key_points_npy = self.gen_keypoints()
+        data_numpy = self.track_key_points(key_points_npy)
 
         # action recognition
         data = torch.from_numpy(data_numpy)
@@ -37,6 +40,7 @@ class DemoOffline(IO):
 
         # model predict
         voting_label_name, video_label_name, output, intensity = self.predict(data)
+        print('voting_label_name:' + voting_label_name + ', video_label_name=', video_label_name)
 
         # render the video
         images = self.render_video(data_numpy, voting_label_name,
@@ -90,6 +94,81 @@ class DemoOffline(IO):
             video_label_name,
             self.arg.height)
         return images
+    
+    def gen_keypoints(self):
+        # load openpose python api
+        if self.arg.openpose is not None:
+            sys.path.append('{}/python'.format(self.arg.openpose))
+            sys.path.append('{}/build/python'.format(self.arg.openpose))
+        try:
+            from openpose import pyopenpose as op
+        except:
+            print('Can not find Openpose Python API.')
+            return
+
+        video_name = self.arg.video.split('/')[-1].split('.')[0]
+
+        load_key_points = self.arg.load_key_points
+        save_key_points = self.arg.save_key_points
+
+        key_points_npy = None
+        if load_key_points is not None:
+            print('gen_keypoints: load load_key_points=' + load_key_points)
+            key_points_npy = np.load(load_key_points)
+
+        print('gen_keypoints: load video=' + self.arg.video)
+        # initiate
+        opWrapper = op.WrapperPython()
+        params = dict(model_folder='./models', model_pose='COCO')
+        opWrapper.configure(params)
+        opWrapper.start()
+        self.model.eval()
+        video_capture = cv2.VideoCapture(self.arg.video)
+        video_length = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        # pose estimation
+        start_time = time.time()
+        frame_index = 0
+        key_points_list = list()
+        video = list()
+        while(True):
+
+            # get image
+            ret, orig_image = video_capture.read()
+            if orig_image is None:
+                break
+            source_H, source_W, _ = orig_image.shape
+            orig_image = cv2.resize(
+                orig_image, (256 * source_W // source_H, 256))
+            H, W, _ = orig_image.shape
+            video.append(orig_image)
+
+            # pose estimation
+            datum = op.Datum()
+            datum.cvInputData = orig_image
+            opWrapper.emplaceAndPop([datum])
+            multi_pose = datum.poseKeypoints  # (num_person, num_joint, 3)
+            if len(multi_pose.shape) != 3:
+                continue
+            key_points_list.append(multi_pose)
+            frame_index += 1
+            print('Pose estimation ({}/{}).'.format(frame_index, video_length))
+
+        key_points_npy = np.asarray(key_points_list)
+
+        if save_key_points is not None:
+            print('gen_keypoints: load save_key_points=' + save_key_points)
+            np.save(save_key_points, key_points_npy)
+
+        return video, key_points_npy
+
+    def track_key_points(self, key_points_npy):
+        pose_tracker = naive_pose_tracker(len(key_points_npy))
+        for i in range(key_points_npy.shape[0]):
+            pose_tracker.update(multi_pose, i)
+
+        tracks = pose_tracker.get_skeleton_sequence()
+        return tracks
 
     def pose_estimation(self):
         # load openpose python api
@@ -182,6 +261,12 @@ class DemoOffline(IO):
                             default=1080,
                             type=int,
                             help='height of frame in the output video.')
+        parser.add_argument('--load_key_points',
+                            default=None,
+                            help='Path to body key points to load')
+        parser.add_argument('--save_key_points',
+                            default=None,
+                            help='Path to body key points to save')
         parser.set_defaults(
             config='./config/st_gcn/kinetics-skeleton/demo_offline.yaml')
         parser.set_defaults(print_log=False)
