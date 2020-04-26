@@ -28,10 +28,10 @@ class DemoOffline(IO):
             self.label_name = label_name
 
         # pose estimation
-        # video, data_numpy = self.pose_estimation()
+        video, data_numpy = self.pose_estimation()
 
-        video, key_points_npy = self.gen_keypoints()
-        data_numpy = self.track_key_points(key_points_npy)
+        # video, key_points_list = self.gen_keypoints()
+        # data_numpy = self.track_key_points(key_points_list)
 
         # action recognition
         data = torch.from_numpy(data_numpy)
@@ -46,12 +46,23 @@ class DemoOffline(IO):
         images = self.render_video(data_numpy, voting_label_name,
                             video_label_name, intensity, video)
 
-        # visualize
-        for image in images:
-            image = image.astype(np.uint8)
-            cv2.imshow("ST-GCN", image)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+        if self.arg.result_video is not None:
+            out = None
+            for image in images:
+                if out is None:
+                    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                    out = cv2.VideoWriter(self.arg.result_video, fourcc, self.arg.fps, (image.shape[1], image.shape[0]))
+                image = image.astype(np.uint8)
+                out.write(image)
+            out.release()
+            print('written ' + self.arg.result_video)
+        else:
+            # visualize
+            for image in images:
+                image = image.astype(np.uint8)
+                cv2.imshow("ST-GCN", image)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
 
     def predict(self, data):
         # forward
@@ -111,7 +122,6 @@ class DemoOffline(IO):
         load_key_points = self.arg.load_key_points
         save_key_points = self.arg.save_key_points
 
-        key_points_npy = None
         if load_key_points is not None:
             print('gen_keypoints: load load_key_points=' + load_key_points)
             key_points_npy = np.load(load_key_points)
@@ -154,18 +164,16 @@ class DemoOffline(IO):
             frame_index += 1
             print('Pose estimation ({}/{}).'.format(frame_index, video_length))
 
-        key_points_npy = np.asarray(key_points_list)
-
         if save_key_points is not None:
             print('gen_keypoints: load save_key_points=' + save_key_points)
-            np.save(save_key_points, key_points_npy)
+            #np.save(save_key_points, key_points_npy)
 
-        return video, key_points_npy
+        return video, key_points_list
 
-    def track_key_points(self, key_points_npy):
-        pose_tracker = naive_pose_tracker(len(key_points_npy))
-        for i in range(key_points_npy.shape[0]):
-            pose_tracker.update(multi_pose, i)
+    def track_key_points(self, key_points_list):
+        pose_tracker = naive_pose_tracker(len(key_points_list))
+        for i in range(len(key_points_list)):
+            pose_tracker.update(key_points_list[i], i)
 
         tracks = pose_tracker.get_skeleton_sequence()
         return tracks
@@ -248,6 +256,10 @@ class DemoOffline(IO):
         parser.add_argument('--video',
                             default='./resource/media/skateboarding.mp4',
                             help='Path to video')
+        parser.add_argument('--fps',
+                            default=30.0,
+                            type=float,
+                            help='fps of input video')
         parser.add_argument('--openpose',
                             default=None,
                             help='Path to openpose')
@@ -267,6 +279,9 @@ class DemoOffline(IO):
         parser.add_argument('--save_key_points',
                             default=None,
                             help='Path to body key points to save')
+        parser.add_argument('--result_video',
+                            default=None,
+                            help='Path to result video to save')
         parser.set_defaults(
             config='./config/st_gcn/kinetics-skeleton/demo_offline.yaml')
         parser.set_defaults(print_log=False)
