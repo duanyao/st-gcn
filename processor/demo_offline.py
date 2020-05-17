@@ -19,7 +19,6 @@ import cv2
 class DemoOffline(IO):
 
     def start(self):
-        
         # initiate
         label_name_path = './resource/kinetics_skeleton/label_name.txt'
         with open(label_name_path) as f:
@@ -27,8 +26,10 @@ class DemoOffline(IO):
             label_name = [line.rstrip() for line in label_name]
             self.label_name = label_name
 
+        fps_ratio = self.arg.model_fps / self.arg.fps
+        n_copy = max(1, int(fps_ratio))
         # pose estimation
-        video, data_numpy = self.pose_estimation()
+        video, data_numpy = self.pose_estimation(n_copy)
 
         # video, key_points_list = self.gen_keypoints()
         # data_numpy = self.track_key_points(key_points_list)
@@ -51,7 +52,7 @@ class DemoOffline(IO):
             for image in images:
                 if out is None:
                     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                    out = cv2.VideoWriter(self.arg.result_video, fourcc, self.arg.fps, (image.shape[1], image.shape[0]))
+                    out = cv2.VideoWriter(self.arg.result_video, fourcc, self.arg.model_fps, (image.shape[1], image.shape[0]))
                 image = image.astype(np.uint8)
                 out.write(image)
             out.release()
@@ -178,7 +179,7 @@ class DemoOffline(IO):
         tracks = pose_tracker.get_skeleton_sequence()
         return tracks
 
-    def pose_estimation(self):
+    def pose_estimation(self, n_copy=1):
         # load openpose python api
         if self.arg.openpose is not None:
             sys.path.append('{}/python'.format(self.arg.openpose))
@@ -200,7 +201,7 @@ class DemoOffline(IO):
         self.model.eval()
         video_capture = cv2.VideoCapture(self.arg.video)
         video_length = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
-        pose_tracker = naive_pose_tracker(data_frame=video_length)
+        pose_tracker = naive_pose_tracker(data_frame=video_length * n_copy)
 
         # pose estimation
         start_time = time.time()
@@ -216,7 +217,6 @@ class DemoOffline(IO):
             orig_image = cv2.resize(
                 orig_image, (256 * source_W // source_H, 256))
             H, W, _ = orig_image.shape
-            video.append(orig_image)
 
             # pose estimation
             datum = op.Datum()
@@ -233,10 +233,12 @@ class DemoOffline(IO):
             multi_pose[:, :, 0][multi_pose[:, :, 2] == 0] = 0
             multi_pose[:, :, 1][multi_pose[:, :, 2] == 0] = 0
 
-            # pose tracking
-            pose_tracker.update(multi_pose, frame_index)
-            frame_index += 1
+            for i in range(n_copy):
+                video.append(orig_image)
+                # pose tracking
+                pose_tracker.update(multi_pose, n_copy * frame_index + i)
 
+            frame_index += 1
             print('Pose estimation ({}/{}).'.format(frame_index, video_length))
 
         data_numpy = pose_tracker.get_skeleton_sequence()
@@ -267,8 +269,8 @@ class DemoOffline(IO):
                             default=128,
                             type=int)
         parser.add_argument('--model_fps',
-                            default=30,
-                            type=int)
+                            default=30.0,
+                            type=float)
         parser.add_argument('--height',
                             default=1080,
                             type=int,
