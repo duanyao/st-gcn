@@ -179,16 +179,11 @@ class DemoOffline(IO):
         return tracks
 
     def pose_estimation(self, n_copy=1):
-        # load openpose python api
-        if self.arg.openpose is not None:
-            sys.path.append('{}/python'.format(self.arg.openpose))
-            sys.path.append('{}/build/python'.format(self.arg.openpose))
         try:
             from openpose import pyopenpose as op
         except:
             print('Can not find Openpose Python API.')
             return
-
 
         video_name = self.arg.video.split('/')[-1].split('.')[0]
 

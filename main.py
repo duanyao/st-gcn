@@ -2,11 +2,24 @@
 import argparse
 import sys
 
-# torchlight
-import torchlight
-from torchlight import import_class
+
 
 if __name__ == '__main__':
+    # openpose should be imported before torch/torchlight, otherwise GPU memory usage would be increased by 270MB
+    preParser = argparse.ArgumentParser()
+    preParser.add_argument('--openpose', default=None)
+    arg, unknown = preParser.parse_known_args()
+    if arg.openpose is not None:
+        # print('main: importing openpose from ' + arg.openpose)
+        sys.path.append('{}/python'.format(arg.openpose))
+    try:
+        from openpose import pyopenpose
+    except:
+        pass
+
+    # torchlight
+    import torchlight
+    from torchlight import import_class
 
     parser = argparse.ArgumentParser(description='Processor collection')
 
