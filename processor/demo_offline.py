@@ -20,8 +20,7 @@ class DemoOffline(IO):
 
     def start(self):
         # initiate
-        label_name_path = './resource/kinetics_skeleton/label_name.txt'
-        with open(label_name_path) as f:
+        with open(self.arg.label_name_path) as f:
             label_name = f.readlines()
             label_name = [line.rstrip() for line in label_name]
             self.label_name = label_name
@@ -130,7 +129,7 @@ class DemoOffline(IO):
         print('gen_keypoints: load video=' + self.arg.video)
         # initiate
         opWrapper = op.WrapperPython()
-        params = dict(model_folder='./models', model_pose='COCO')
+        params = dict(model_folder=self.arg.openpose_model_dir, model_pose='COCO')
         opWrapper.configure(params)
         opWrapper.start()
         self.model.eval()
@@ -195,7 +194,7 @@ class DemoOffline(IO):
 
         # initiate
         opWrapper = op.WrapperPython()
-        params = dict(model_folder='./models', model_pose='COCO')
+        params = dict(model_folder=self.arg.openpose_model_dir, model_pose='COCO')
         opWrapper.configure(params)
         opWrapper.start()
         self.model.eval()
@@ -255,6 +254,9 @@ class DemoOffline(IO):
             description='Demo for Spatial Temporal Graph Convolution Network')
 
         # region arguments yapf: disable
+        parser.add_argument('--label_name_path',
+                            default='./resource/kinetics_skeleton/label_name.txt',
+                            help='Path to label_name.txt')
         parser.add_argument('--video',
                             default='./resource/media/skateboarding.mp4',
                             help='Path to video')
@@ -265,6 +267,9 @@ class DemoOffline(IO):
         parser.add_argument('--openpose',
                             default=None,
                             help='Path to openpose')
+        parser.add_argument('--openpose_model_dir',
+                            default='./models',
+                            help='Path to openpose model')
         parser.add_argument('--model_input_frame',
                             default=128,
                             type=int)
